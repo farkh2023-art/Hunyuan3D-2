@@ -109,3 +109,40 @@ Two independent subpackages under `hy3dgen/`, wired together only by user code (
   hardcoding construction.
 - GPU-timing/debug logging is opt-in via the `HY3DGEN_DEBUG` env var and the `synchronize_timer` helper, not
   ad-hoc prints.
+
+## Local Windows production layer (`scripts/`, `docs/PHASE*.md`)
+
+This checkout is vendored inside a larger project (`automatisation_yoube`) and is used as-is (upstream
+`hy3dgen` is never modified) to actually produce textured 3D assets on a Windows/CUDA machine. On top of
+the upstream package, this checkout adds:
+
+- `scripts/generate_textured_3d.py` + `scripts/generate_textured_3d.ps1` — the recommended local entry
+  point for automated, reproducible production runs in this checkout. `gradio_app.py` and `api_server.py`
+  remain valid upstream entry points for the interactive UI and the API server, respectively; the CLI here
+  doesn't replace them, it targets scripted/batch use instead. It's a single-image → textured-GLB CLI that
+  wraps the unmodified shapegen → reduce → texgen flow with: preflight checks (CUDA available, both native
+  extensions importable, disk/VRAM/RAM thresholds, no other instance of itself already running), a VRAM
+  policy gate for `--low-vram` vs full texgen, GLB validation (geometry, and material/texture/image presence
+  for the textured output), and a `metadata.json` + `generation.log` written per job under `--output-dir`.
+  The `.ps1` launcher resolves `.venv\Scripts\python.exe` relative to its own script location, not `$PWD`,
+  so it can be invoked from any directory.
+- `docs/PHASE*.md` — dated, append-only audit logs (in French) of this Windows porting/production effort,
+  each ending in a verdict line (e.g. `READY_WITH_WARNINGS`, `PARTIAL_NATIVE_SUPPORT`,
+  `TEXTURED_GENERATION_READY`). Treat them as historical record, not living docs: read the latest relevant
+  one for context before redoing environment/build investigation, but don't edit old phase docs — write a
+  new one instead if the user is continuing this audit trail. `docs/PHASE5*_EP001_*.md` are per-episode
+  content-production logs for actual generation jobs, not environment docs.
+- Native extension build reality on this machine (from `PHASE2*_WINDOWS.md`): `nvcc` (CUDA Toolkit 12.4)
+  requires an MSVC host compiler in the 19.3x series; the only MSVC toolset initially installed was 19.44
+  (too new, rejected by `nvcc` without `-allow-unsupported-compiler`, which was deliberately not used). Fix
+  was to install an *additional* MSVC toolset (14.38, `cl.exe` 19.38.x) side-by-side with the default one,
+  and build `custom_rasterizer` under a Developer shell selecting that older toolset — not to modify
+  `setup.py` or pass unsupported-compiler flags. Both `custom_rasterizer_kernel` and `mesh_processor` are
+  confirmed importable in this repo's `.venv` as a result. `hy3dgen/texgen/differentiable_renderer/`'s
+  alternate `compile_mesh_painter.bat` (hardcoded for g++/Python 3.12) does not apply here — use its
+  `setup.py` instead, as the top-level Install/build section already says.
+- MSVC 19.38, the RTX 4070 Ti (12 GB VRAM), `--low-vram`, and the `mini`/`turbo` model variants are the
+  configuration validated on this specific machine, not universal Hunyuan3D-2 requirements — this GPU is
+  below the README's 16 GB recommendation for the full shape+texture pipeline, so `--low-vram`
+  (`pipeline.enable_model_cpu_offload()`) and the `mini`/`turbo` variants are this machine's workaround,
+  already wired as CLI flags/defaults in `generate_textured_3d.py`. A different machine may need neither.
