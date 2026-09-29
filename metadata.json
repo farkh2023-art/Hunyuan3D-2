@@ -1,0 +1,8 @@
+{
+  "name": "Hunyuan3D-2 Studio",
+  "description": "High-performance 3D asset generation from text, single-view, and multi-view images powered by Tencent Hunyuan3D-2 with real-time 3D inspection and mesh export.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
